@@ -34,7 +34,10 @@ font:
   # gfonts://family[@weight]
   - file: "gfonts://Roboto"
     id: myfont
-    size: 14
+    size: 18
+  - file: "gfonts://Roboto"
+    id: font_level
+    size: 24
 
 i2c:
   sda: GPIO4
@@ -60,24 +63,31 @@ display:
 
       - id: page1
         lambda: |-
-          it.rectangle(0, 0, 128, 32);
-          it.rectangle(0, 0, 128, 16);
-          it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
-          it.printf(1, 16, id(myfont), "%d", id(mycounter));
+          int x_max = 80;
+          it.rectangle(0, 0, x_max, 32);
+          it.filled_rectangle(0, 0, id(battery_level)*x_max/100, 32);
+          it.printf(x_max+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
       - id: page2
         lambda: |-
-          it.print(0, 10, id(myfont), "page 2");
+          //it.rectangle(0, 0, 128, 32);
+          //it.rectangle(0, 0, 128, 16);
+          //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
+          it.printf(0, 0, id(myfont), "spegnimento...");
 
 interval:
   - interval: 1s
     then:
       - lambda: |-
-          id(mycounter) += 1;
-  - interval: 5s
-    then:
-      - display.page.show_next: oled
-      - component.update: oled
-      #- display.print("Temperature:", temperature.state, "°C")
+          id(battery_level) -= 10;
+          if (id(battery_level) < 1) {
+            id(battery_level) = 100;
+            id(oled).show_page(id(page2));
+
+          }
+  # - interval: 3s
+  #   then:
+  #     - display.page.show_next: oled
+  #     - component.update: oled
 
 
 binary_sensor:
@@ -87,10 +97,13 @@ binary_sensor:
 
 
 globals:
-   - id: mycounter
+   - id: battery_level
      type: int
      restore_value: no
-     initial_value: '0'
+     initial_value: '100'
+
+
+
 
 sensor:
   - platform: adc

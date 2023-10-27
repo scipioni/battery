@@ -11,7 +11,7 @@ tasks:
       - echo "{{.GREETING}}"
     silent: true
 
-  upload:
+  flash:
     cmds:
       - docker compose run --rm esphome upload battery.yaml --device /dev/ttyUSB0
 
