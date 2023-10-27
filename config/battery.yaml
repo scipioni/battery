@@ -1,0 +1,51 @@
+esphome:
+  name: battery
+
+esp8266:
+  board: nodemcu
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: ""
+
+ota:
+  password: ""
+
+wifi:
+  ssid: "ranch"
+  password: !secret WifiPassword
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Battery Fallback Hotspot"
+    password: "BcmUJnZZawL0"
+
+captive_portal:
+
+
+font:
+  # - file: "fonts/Comic Sans MS.ttf"
+  #   id: my_font
+  #   size: 20
+
+  # gfonts://family[@weight]
+  - file: "gfonts://Roboto"
+    id: roboto
+    size: 20
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  frequency: 800kHz
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x32"
+    #reset_pin: D0
+    #address: 0x3C
+    lambda: |-
+      it.print(0, 0, id(roboto), "Hello World!");
+    
