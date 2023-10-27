@@ -11,6 +11,10 @@ tasks:
       - echo "{{.GREETING}}"
     silent: true
 
-  run:
+  upload:
     cmds:
-      - docker compose run --rm esphome run battery.yaml
+      - docker compose run --rm esphome upload battery.yaml --device /dev/ttyUSB0
+
+  compile:
+    cmds:
+      - docker compose run --rm esphome compile battery.yaml

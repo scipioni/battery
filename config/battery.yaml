@@ -33,19 +33,74 @@ font:
 
   # gfonts://family[@weight]
   - file: "gfonts://Roboto"
-    id: roboto
-    size: 20
+    id: myfont
+    size: 14
 
 i2c:
   sda: GPIO4
   scl: GPIO5
   frequency: 800kHz
 
+# number:
+#   - id: counter
+#     initial_value: 0
+
 display:
   - platform: ssd1306_i2c
+    id: oled
     model: "SSD1306 128x32"
-    #reset_pin: D0
-    #address: 0x3C
-    lambda: |-
-      it.print(0, 0, id(roboto), "Hello World!");
-    
+    update_interval: 1s
+    pages:
+      # - id: page_start
+      #   lambda: |-
+      #     it.print("Counter:", counter.state)
+      #     //it.print(0, 0, id(roboto), "Start");
+      #     //it.print("Time:", time.now().time_of_day().to_string())
+      #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
+
+      - id: page1
+        lambda: |-
+          it.rectangle(0, 0, 128, 32);
+          it.rectangle(0, 0, 128, 16);
+          it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
+          it.printf(1, 16, id(myfont), "%d", id(mycounter));
+      - id: page2
+        lambda: |-
+          it.print(0, 10, id(myfont), "page 2");
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(mycounter) += 1;
+  - interval: 5s
+    then:
+      - display.page.show_next: oled
+      - component.update: oled
+      #- display.print("Temperature:", temperature.state, "°C")
+
+
+binary_sensor:
+  - platform: status
+    name: "Node Status"
+    id: system_status
+
+
+globals:
+   - id: mycounter
+     type: int
+     restore_value: no
+     initial_value: '0'
+
+sensor:
+  - platform: adc
+    pin: VCC
+    name: $devicename VCC Voltage
+    id: vcc
+  - platform: wifi_signal
+    name: "WiFi Signal Sensor"
+    update_interval: 15s
+    id: sstrength
+  - platform: uptime
+    name: Uptime Sensor
+    id: upt
