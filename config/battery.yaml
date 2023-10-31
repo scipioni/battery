@@ -26,85 +26,24 @@ wifi:
 captive_portal:
 
 
-font:
-  # - file: "fonts/Comic Sans MS.ttf"
-  #   id: my_font
-  #   size: 20
 
-  # gfonts://family[@weight]
-  - file: "gfonts://Roboto"
-    id: myfont
-    size: 18
-  - file: "gfonts://Roboto"
-    id: font_level
-    size: 24
-
-# i2c:
-#   sda: GPIO4
-#   scl: GPIO5
-#   frequency: 800kHz
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  frequency: 800kHz
 
 # number:
 #   - id: counter
 #     initial_value: 0
 
-# display:
-#   - platform: ssd1306_i2c
-#     id: oled
-#     #model: "SSD1306 128x32"
-#     model: "SSD1306 128x160"
-#     reset_pin: GPIO0
-#     update_interval: 1s
-#     pages:
-#       # - id: page_start
-#       #   lambda: |-
-#       #     it.print("Counter:", counter.state)
-#       #     //it.print(0, 0, id(roboto), "Start");
-#       #     //it.print("Time:", time.now().time_of_day().to_string())
-#       #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
+# SSH1106
 
-#       - id: page1
-#         lambda: |-
-#           int x_max = 80;
-#           it.rectangle(0, 0, x_max, 32);
-#           it.filled_rectangle(0, 0, id(battery_level)*x_max/100, 32);
-#           it.printf(x_max+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
-#       - id: page2
-#         lambda: |-
-#           //it.rectangle(0, 0, 128, 32);
-#           //it.rectangle(0, 0, 128, 16);
-#           //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
-#           it.printf(0, 0, id(myfont), "spegnimento...");
-
-
-# The ST7735 display is connected to the NodeMCU board as follows:
-# RST pin is connected to D4 (ESP8266EX GPIO2),
-# CS pin is connected to D3 (ESP8266EX GPIO0),
-# D/C-RS pin is connected to D2 (ESP8266EX GPIO4),
-# DIN-mosi-sda pin is connected to D7 (ESP8266EX GPIO13),
-# CLK-sck pin is connected to D5 (ESP8266EX GPIO14),
-## Pins D5 (GPIO14) and D7 (GPIO13) are hardware SPI module pins of the ESP8266EX microcontroller respectively for SCK (serial clock) and MOSI (master-out slave-in).
-
-spi:
-  clk_pin: GPIO14
-  mosi_pin: GPIO13
-
-
-# SDA for MOSI and SCK for CLK.
 display:
-  - platform: st7735
+  - platform: ssd1306_i2c
     id: oled
-    model: "INITR_BLACKTAB"
-    reset_pin: GPIO2
-    cs_pin: GPIO0
-    dc_pin: GPIO4
-    rotation: 90
-    device_width: 128
-    device_height: 160
-    col_start: 0
-    row_start: 0
-    eight_bit_color: True
-    #use_bgr: True
+    #model: "SSD1306 128x64"
+    model: "SH1106 128x64"
+    #reset_pin: GPIO0
     update_interval: 1s
     pages:
       # - id: page_start
@@ -116,30 +55,91 @@ display:
 
       - id: page1
         lambda: |-
-          it.rectangle(0,  0, it.get_width(), it.get_height(), id(my_blue));
-          it.rectangle(0, 20, it.get_width(), it.get_height(), id(my_blue));   // header bar
+          // batteria
+          int x0 = 124; 
+          int y0 = 32;
+          it.rectangle(0, 0, x0, y0);
+          it.filled_rectangle(3, 3, id(battery_level)*x0/100-2, y0-6);
+          it.filled_rectangle(x0, 10, x0+1, 12);
+          //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
+
+          // autonomia
+          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
+
+      - id: page2
+        lambda: |-
+          int minutes = id(uptime_sensor).state/60;
+          it.printf(64, 0, id(font_uptime), TextAlign::CENTER_HORIZONTAL, "acceso da");
+          it.printf(64, 25, id(font_uptime), TextAlign::CENTER_HORIZONTAL, "%d minuti", minutes);
+          //it.rectangle(0, 0, 128, 32);
+          //it.rectangle(0, 0, 128, 16);
+          //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
+          //it.printf(0, 0, id(myfont), "spegnimento...");
+
+
+# The ST7735 display is connected to the NodeMCU board as follows:
+# RST pin is connected to D4 (ESP8266EX GPIO2),
+# CS pin is connected to D3 (ESP8266EX GPIO0),
+# D/C-RS pin is connected to D2 (ESP8266EX GPIO4),
+# DIN-mosi-sda pin is connected to D7 (ESP8266EX GPIO13),
+# CLK-sck pin is connected to D5 (ESP8266EX GPIO14),
+## Pins D5 (GPIO14) and D7 (GPIO13) are hardware SPI module pins of the ESP8266EX microcontroller respectively for SCK (serial clock) and MOSI (master-out slave-in).
+
+# spi:
+#   clk_pin: GPIO14
+#   mosi_pin: GPIO13
+
+
+# # SDA for MOSI and SCK for CLK.
+# display:
+#   - platform: st7735
+#     id: oled
+#     model: "INITR_BLACKTAB"
+#     reset_pin: GPIO2
+#     cs_pin: GPIO0
+#     dc_pin: GPIO4
+#     rotation: 90
+#     device_width: 128
+#     device_height: 160
+#     col_start: 0
+#     row_start: 0
+#     eight_bit_color: True
+#     #use_bgr: True
+#     update_interval: 1s
+#     pages:
+#       # - id: page_start
+#       #   lambda: |-
+#       #     it.print("Counter:", counter.state)
+#       #     //it.print(0, 0, id(roboto), "Start");
+#       #     //it.print("Time:", time.now().time_of_day().to_string())
+#       #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
+
+#       - id: page1
+#         lambda: |-
+#           it.rectangle(0,  0, it.get_width(), it.get_height(), id(my_blue));
+#           it.rectangle(0, 20, it.get_width(), it.get_height(), id(my_blue));   // header bar
           
-          it.print(it.get_width()/2, 10, id(myfont), id(my_red), TextAlign::CENTER, "Cerbero");
-          //it.print(it.get_width()/2, 30, id(myfont), id(my_green), TextAlign::CENTER, "Cerbero");
-          //it.print(it.get_width()/2, 50, id(myfont), id(my_red), TextAlign::CENTER, "ESPHome");
-          int x_max = 110;
-          int y=30;
-          int h=15;
-          it.rectangle(0, y, x_max, y+h);
-          it.filled_rectangle(0, y, id(battery_level)*x_max/100, y+h);
-          it.printf(x_max+3, y, id(font_level), "%d%%", min(99,id(battery_level)));
-      # - id: page2
-      #   lambda: |-
-      #     int x_max = 100;
-      #     it.rectangle(0, 0, x_max, 32);
-      #     it.filled_rectangle(0, 0, id(battery_level)*x_max/100, 32);
-      #     it.printf(x_max+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
-      # - id: page3
-      #   lambda: |-
-      #     //it.rectangle(0, 0, 128, 32);
-      #     //it.rectangle(0, 0, 128, 16);
-      #     //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
-      #     it.printf(0, 0, id(myfont), "spegnimento...");
+#           it.print(it.get_width()/2, 10, id(myfont), id(my_red), TextAlign::CENTER, "Cerbero");
+#           //it.print(it.get_width()/2, 30, id(myfont), id(my_green), TextAlign::CENTER, "Cerbero");
+#           //it.print(it.get_width()/2, 50, id(myfont), id(my_red), TextAlign::CENTER, "ESPHome");
+#           int x_max = 110;
+#           int y=30;
+#           int h=15;
+#           it.rectangle(0, y, x_max, y+h);
+#           it.filled_rectangle(0, y, id(battery_level)*x_max/100, y+h);
+#           it.printf(x_max+3, y, id(font_level), "%d%%", min(99,id(battery_level)));
+#       # - id: page2
+#       #   lambda: |-
+#       #     int x_max = 100;
+#       #     it.rectangle(0, 0, x_max, 32);
+#       #     it.filled_rectangle(0, 0, id(battery_level)*x_max/100, 32);
+#       #     it.printf(x_max+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
+#       # - id: page3
+#       #   lambda: |-
+#       #     //it.rectangle(0, 0, 128, 32);
+#       #     //it.rectangle(0, 0, 128, 16);
+#       #     //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
+#       #     it.printf(0, 0, id(myfont), "spegnimento...");
 
 
 interval:
@@ -149,14 +149,20 @@ interval:
           id(battery_level) -= 10;
           if (id(battery_level) < 1) {
             id(battery_level) = 100;
-            //id(oled).show_page(id(page3));
+            //id(oled).show_page(id(page2));
 
           }
   - interval: 3s
     then:
       - display.page.show_next: oled
       - component.update: oled
-
+  - interval: 5s
+    then:
+      - lambda: |-
+          id(autonomy) -= 1;
+          if(id(autonomy) < 1) {
+            id(autonomy) = 300;
+          }
 
 binary_sensor:
   - platform: status
@@ -169,7 +175,10 @@ globals:
      type: int
      restore_value: no
      initial_value: '100'
-
+   - id: autonomy
+     type: int
+     restore_value: no
+     initial_value: '180'
 
 
 
@@ -184,8 +193,8 @@ sensor:
     id: sstrength
   - platform: uptime
     name: Uptime Sensor
-    id: upt
-
+    id: uptime_sensor
+    update_interval: 60s
 
 color:
   - id: my_red
@@ -224,3 +233,23 @@ color:
     red: 100%
     green: 100%
     blue: 100%    
+
+
+font:
+  # - file: "fonts/Comic Sans MS.ttf"
+  #   id: my_font
+  #   size: 20
+
+  # gfonts://family[@weight]
+  - file: "gfonts://Roboto"
+    id: myfont
+    size: 18
+  - file: "gfonts://Roboto"
+    id: font_level
+    size: 24
+  - file: "gfonts://Roboto"
+    id: font_autonomy
+    size: 18
+  - file: "gfonts://Roboto"
+    id: font_uptime
+    size: 20
