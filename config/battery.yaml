@@ -2,7 +2,7 @@ esphome:
   name: battery
 
 esp8266:
-  board: nodemcu
+  board: esp01_1m
 
 # Enable logging
 logger:
@@ -52,6 +52,9 @@ display:
       #     //it.print(0, 0, id(roboto), "Start");
       #     //it.print("Time:", time.now().time_of_day().to_string())
       #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
+      - id: page0
+        lambda: |-
+          it.printf(0, 0, id(font_small), "A0=%2.2f P=%d", id(adc_sensor).state, id(power));
 
       - id: page1
         lambda: |-
@@ -152,10 +155,10 @@ interval:
             //id(oled).show_page(id(page2));
 
           }
-  - interval: 3s
-    then:
-      - display.page.show_next: oled
-      - component.update: oled
+  # - interval: 3s
+  #   then:
+  #     - display.page.show_next: oled
+  #     - component.update: oled
   - interval: 5s
     then:
       - lambda: |-
@@ -179,14 +182,36 @@ globals:
      type: int
      restore_value: no
      initial_value: '180'
+   - id: power
+     type: int
+     restore_value: no
+     initial_value: '1'
 
-
+output:
+  - platform: gpio
+    pin: GPIO12
+    id: turn_off
 
 sensor:
   - platform: adc
-    pin: VCC
-    name: $devicename VCC Voltage
-    id: vcc
+    pin: A0
+    id: adc_sensor
+    name: "charge"
+    update_interval: 1s
+    filters:
+      - multiply: 3.3
+    on_value_range:
+      - below: 2.0
+        then:
+          lambda: |-
+            id(power) = 0;
+          # - number.set:
+          #   id: power
+          #   value: 0
+  # - platform: adc
+  #   pin: VCC
+  #   name: $devicename VCC Voltage
+  #   id: vcc
   - platform: wifi_signal
     name: "WiFi Signal Sensor"
     update_interval: 15s
@@ -253,3 +278,6 @@ font:
   - file: "gfonts://Roboto"
     id: font_uptime
     size: 20
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 14
