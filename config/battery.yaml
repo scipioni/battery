@@ -2,7 +2,8 @@ esphome:
   name: battery
 
 esp8266:
-  board: esp01_1m
+  #board: esp01_1m
+  board: d1_mini
 
 # Enable logging
 logger:
@@ -41,8 +42,8 @@ i2c:
 display:
   - platform: ssd1306_i2c
     id: oled
-    #model: "SSD1306 128x64"
-    model: "SH1106 128x64"
+    model: "SSD1306 128x32"
+    #model: "SH1106 128x64"
     #reset_pin: GPIO0
     update_interval: 1s
     pages:
@@ -166,6 +167,13 @@ interval:
           if(id(autonomy) < 1) {
             id(autonomy) = 300;
           }
+  - interval: 1s
+    then:
+      - switch.turn_off: led
+  - interval: 500ms
+    then:    
+      - switch.turn_on: led
+  
 
 binary_sensor:
   - platform: status
@@ -187,12 +195,18 @@ globals:
      restore_value: no
      initial_value: '1'
 
-output:
+switch:
+  # pulled to gnd 
   - platform: gpio
-    pin: GPIO12
-    id: turn_off
+    pin: GPIO15
+    id: power_on
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: gpio
+    pin: D4
+    id: led
 
 sensor:
+  # high value when button is pressed
   - platform: adc
     pin: A0
     id: adc_sensor
@@ -201,10 +215,15 @@ sensor:
     filters:
       - multiply: 3.3
     on_value_range:
-      - below: 2.0
+      # - below: 2.0
+      #   then:
+      #     lambda: |-
+      #       id(power) = 0;
+      - above: 3.0
         then:
-          lambda: |-
-            id(power) = 0;
+          - switch.toggle: power_on
+          # lambda: |-
+          #   id(power) = 0;
           # - number.set:
           #   id: power
           #   value: 0
