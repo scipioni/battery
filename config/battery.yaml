@@ -1,5 +1,9 @@
 esphome:
   name: battery
+  on_boot:
+      #priority: 550.0
+      then:
+        - display.page.show: page_battery
 
 esp8266:
   #board: esp01_1m
@@ -10,12 +14,76 @@ i2c:
   scl: GPIO5
   frequency: 800kHz
 
+switch:
+  # pulled to gnd 
+  - platform: gpio
+    pin: GPIO15
+    id: jetson_on
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: gpio
+    pin: D4
+    id: led
+    inverted: True
+
+sensor:
+  # on press button:
+  # - if adc is high then jetson is off and turn on is requested
+  # - if adc is low then turn off is requested
+  - platform: adc
+    pin: A0
+    id: adc_sensor
+    name: "charge"
+    update_interval: 100ms
+    filters:
+      - multiply: 3.3
+    on_value_range:
+      - below: 0.5
+        then:
+          - if:
+              condition:
+                - lambda: |-    
+                    return (id(uptime_seconds) > 5);
+              then:
+                - lambda: |-
+                    id(status) = -1;
+                - display.page.show: page_shutdown
+                - delay: 3s
+                - switch.turn_off: jetson_on
+      - above: 3.0
+        then:
+          - if:
+              condition:
+                - lambda: |-    
+                    return (id(status) >= 0);
+              then:
+                - lambda: |-
+                    id(status) = -1;
+                - display.page.show: page_start
+                - switch.turn_on: jetson_on
+                - delay: 3s
+                - display.page.show: page_debug
+          # lambda: |-
+          #   id(power) = 0;
+          # - number.set:
+          #   id: power
+          #   value: 0
+  - platform: wifi_signal
+    name: "WiFi Signal Sensor"
+    update_interval: 15s
+    id: sstrength
+  - platform: uptime
+    name: Uptime Sensor
+    id: uptime_sensor
+    update_interval: 60s
+
+
 display:
   - platform: ssd1306_i2c
     id: oled
-    model: "SSD1306 128x32"
-    #model: "SH1106 128x64"
+    #model: "SSD1306 128x32"
+    model: "SH1106 128x64"
     update_interval: 1s
+    rotation: 180
     pages:
       # - id: page_start
       #   lambda: |-
@@ -23,11 +91,34 @@ display:
       #     //it.print(0, 0, id(roboto), "Start");
       #     //it.print("Time:", time.now().time_of_day().to_string())
       #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
-      - id: page0
+      - id: page_debug
         lambda: |-
-          it.printf(0, 0, id(font_small), "A0=%2.2f P=%d", id(adc_sensor).state, id(jetson_on).state);
+          it.printf(0, 0, id(font_small), "ADC=%2.2f", id(adc_sensor).state);
+          it.printf(0, 15, id(font_small), "JETSON=%d", id(jetson_on).state);
+          it.printf(0, 30, id(font_small), "uptime=%d", id(uptime_seconds));
 
-      - id: page1
+      - id: page_start
+        lambda: |-
+          it.print(64,32,id(font_big), TextAlign::CENTER, "cerbero");
+      
+      - id: page_shutdown
+        lambda: |-
+          it.print(64,32,id(font_big), TextAlign::CENTER, "spegnimento");
+
+      - id: page_battery
+        lambda: |-
+          // batteria
+          int x0 = 124; 
+          int y0 = 32;
+          it.rectangle(0, 0, x0, y0);
+          it.filled_rectangle(3, 3, id(battery_level)*x0/100-2, y0-6);
+          it.filled_rectangle(x0, 10, x0+1, 12);
+          //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
+
+          // autonomia
+          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
+      
+      - id: page_charging
         lambda: |-
           // batteria
           int x0 = 124; 
@@ -54,11 +145,12 @@ interval:
   - interval: 1s
     then:
       - lambda: |-
-          id(battery_level) -= 10;
-          if (id(battery_level) < 1) {
-            id(battery_level) = 100;
-            //id(oled).show_page(id(page2));
+          id(uptime_seconds) += 1;
 
+          id(battery_level) += 10;
+          if (id(battery_level) > 100) {
+            id(battery_level) = 1;
+            //id(oled).show_page(id(page2));
           }
   # - interval: 3s
   #   then:
@@ -83,64 +175,28 @@ interval:
 #     id: system_status
 
 globals:
-   - id: battery_level
-     type: int
-     restore_value: no
-     initial_value: '100'
-   - id: autonomy
-     type: int
-     restore_value: no
-     initial_value: '180'
+  - id: battery_level
+    type: int
+    restore_value: no
+    initial_value: '100'
+  - id: uptime_seconds
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: autonomy
+    type: int
+    restore_value: no
+    initial_value: '180'
+  - id: status
+    type: int
+    restore_value: no
+    initial_value: '0' # 0 charging, 1 jetson on, -1 jetson off
   #  - id: power
   #    type: int
   #    restore_value: no
   #    initial_value: '1'
 
-switch:
-  # pulled to gnd 
-  - platform: gpio
-    pin: GPIO15
-    id: jetson_on
-    restore_mode: RESTORE_DEFAULT_OFF
-  - platform: gpio
-    pin: D4
-    id: led
-    inverted: True
 
-sensor:
-  # high value when button is pressed
-  - platform: adc
-    pin: A0
-    id: adc_sensor
-    name: "charge"
-    update_interval: 1s
-    filters:
-      - multiply: 3.3
-    on_value_range:
-      # - below: 2.0
-      #   then:
-      #     lambda: |-
-      #       id(power) = 0;
-      - above: 3.0
-        then:
-          - switch.toggle: jetson_on
-          # lambda: |-
-          #   id(power) = 0;
-          # - number.set:
-          #   id: power
-          #   value: 0
-  # - platform: adc
-  #   pin: VCC
-  #   name: $devicename VCC Voltage
-  #   id: vcc
-  - platform: wifi_signal
-    name: "WiFi Signal Sensor"
-    update_interval: 15s
-    id: sstrength
-  - platform: uptime
-    name: Uptime Sensor
-    id: uptime_sensor
-    update_interval: 60s
 
 color:
   - id: my_red
@@ -202,7 +258,9 @@ font:
   - file: "gfonts://Roboto"
     id: font_small
     size: 14
-
+  - file: "gfonts://Roboto"
+    id: font_big
+    size: 18
 # Enable logging
 logger:
 
