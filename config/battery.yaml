@@ -4,8 +4,9 @@ esphome:
       #priority: 550.0
       then:
         - lambda: |-
-            id(status) = 0;
-        - display.page.show: page_battery
+            id(status) = -1; // splash screen
+        - display.page.show: page_splash
+
 esp8266:
   #board: esp01_1m
   board: d1_mini
@@ -50,12 +51,12 @@ sensor:
                     return (id(uptime_seconds) > 5);
               then:
                 - lambda: |-
-                    id(status) = -1; 
+                    id(status) = 0; 
                 - display.page.show: page_shutdown
                 - delay: 3s
                 - switch.turn_off: jetson_on
                 - display.page.show: page_charge
-      - above: 3.0
+      - above: 1.0
         then:
           # - lambda: |-
           #     if (id(status) >= 0) {
@@ -68,11 +69,11 @@ sensor:
           - if:
               condition:
                 - lambda: |-    
-                    return (id(status) >= 0);
+                    return (id(status) <= 0); // se ho appena acceso o ero in carica
               then:
                 - lambda: |-
-                    id(status) = -1;
-                - display.page.show: page_start
+                    id(status) = 1;
+                - display.page.show: page_jetson_splash
                 - switch.turn_on: jetson_on
                 - delay: 3s
                 - display.page.show: page_debug
@@ -106,10 +107,12 @@ display:
           it.printf(0, 15, id(font_small), "JETSON=%d", id(jetson_on).state);
           it.printf(0, 30, id(font_small), "uptime=%d", id(uptime_seconds));
 
-      - id: page_start
+      - id: page_splash
         lambda: |-
           it.print(64,32,id(font_big), TextAlign::CENTER, "cerbero");
-      
+      - id: page_jetson_splash
+        lambda: |-
+          it.print(64,32,id(font_big), TextAlign::CENTER, "accensione");
       - id: page_shutdown
         lambda: |-
           it.print(64,32,id(font_big), TextAlign::CENTER, "spegnimento");
@@ -199,7 +202,7 @@ globals:
   - id: status
     type: int
     restore_value: no
-    initial_value: '0' # 0 charging, 1 jetson on, -1 jetson off
+    initial_value: '-1' # 0 charging and jetson off, 1 jetson on, -1 splash screen
   #  - id: power
   #    type: int
   #    restore_value: no
