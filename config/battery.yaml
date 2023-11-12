@@ -45,17 +45,41 @@ sensor:
     on_value_range:
       - below: 0.5
         then:
-          - if:
-              condition:
-                - lambda: |-    
-                    return (id(uptime_seconds) > 5);
-              then:
-                - lambda: |-
-                    id(status) = 0; 
-                - display.page.show: page_shutdown
-                - delay: 3s
-                - switch.turn_off: jetson_on
-                - display.page.show: page_charge
+          - lambda: |-
+              if (id(uptime_seconds) <= 3)
+                return;
+
+              id(status) = 0; // jetson off
+
+              if (id(status) < 0) {
+                id(oled).show_page(id(page_charge));
+              } else {
+                id(oled).show_page(id(page_shutdown));
+                delay(3000);
+                id(jetson_on).turn_off();
+
+              }
+          # - if:
+          #     condition:
+          #       - lambda: |-    
+          #           return (id(uptime_seconds) > 3);
+          #     then:
+          #       - if:
+          #           condition:
+          #             - lambda: |-    
+          #                 return (id(status) < 0); // ho appena acceso e sto caricando 
+          #           then: # sto alimentando l'esp dalla carica
+          #             - lambda: |-
+          #                 id(status) = 0; // carica e jetson off
+          #             - switch.turn_off: jetson_on
+          #             - display.page.show: page_charge
+          #           else:
+          #             - lambda: |-
+          #                 id(status) = 0; 
+          #             - display.page.show: page_shutdown
+          #             - delay: 3s
+          #             - switch.turn_off: jetson_on
+          #             - display.page.show: page_charge
       - above: 1.0
         then:
           # - lambda: |-
