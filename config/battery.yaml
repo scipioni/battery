@@ -38,10 +38,10 @@ sensor:
     update_interval: 100ms
     filters:
       - multiply: 3.3
-      - median:
-          window_size: 5
-          send_every: 5
-          send_first_at: 1
+      # - median:
+      #     window_size: 5
+      #     send_every: 5
+      #     send_first_at: 1
     on_value_range:
       - below: 0.5
         then:
@@ -49,16 +49,18 @@ sensor:
               if (id(uptime_seconds) <= 3)
                 return;
 
-              id(status) = 0; // jetson off
 
               if (id(status) < 0) {
                 id(oled).show_page(id(page_charge));
+                id(oled).update();
               } else {
                 id(oled).show_page(id(page_shutdown));
+                id(oled).update();
                 delay(3000);
                 id(jetson_on).turn_off();
 
               }
+              id(status) = 0; // jetson off
           # - if:
           #     condition:
           #       - lambda: |-    
@@ -133,13 +135,13 @@ display:
 
       - id: page_splash
         lambda: |-
-          it.print(64,32,id(font_big), TextAlign::CENTER, "cerbero");
+          it.print(64,32,id(font_big), TextAlign::CENTER, "CERBERO");
       - id: page_jetson_splash
         lambda: |-
-          it.print(64,32,id(font_big), TextAlign::CENTER, "accensione");
+          it.print(64,32,id(font_big), TextAlign::CENTER, "CERBERO");
       - id: page_shutdown
         lambda: |-
-          it.print(64,32,id(font_big), TextAlign::CENTER, "spegnimento");
+          it.print(64,32,id(font_big), TextAlign::CENTER, "OFF");
 
       - id: page_battery
         lambda: |-
