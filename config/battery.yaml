@@ -3,8 +3,9 @@ esphome:
   on_boot:
       #priority: 550.0
       then:
+        - lambda: |-
+            id(status) = 0;
         - display.page.show: page_battery
-
 esp8266:
   #board: esp01_1m
   board: d1_mini
@@ -36,6 +37,10 @@ sensor:
     update_interval: 100ms
     filters:
       - multiply: 3.3
+      - median:
+          window_size: 5
+          send_every: 5
+          send_first_at: 1
     on_value_range:
       - below: 0.5
         then:
@@ -45,12 +50,21 @@ sensor:
                     return (id(uptime_seconds) > 5);
               then:
                 - lambda: |-
-                    id(status) = -1;
+                    id(status) = -1; 
                 - display.page.show: page_shutdown
                 - delay: 3s
                 - switch.turn_off: jetson_on
+                - display.page.show: page_charge
       - above: 3.0
         then:
+          # - lambda: |-
+          #     if (id(status) >= 0) {
+          #       id(status) = -1; // spegni
+          #       id(oled).show_page(id(page_start));
+          #       id(jetson_on).turn_on();
+          #       delay(3000);
+          #       id(oled).show_page(id(page_debug));
+          #     }
           - if:
               condition:
                 - lambda: |-    
@@ -62,11 +76,6 @@ sensor:
                 - switch.turn_on: jetson_on
                 - delay: 3s
                 - display.page.show: page_debug
-          # lambda: |-
-          #   id(power) = 0;
-          # - number.set:
-          #   id: power
-          #   value: 0
   - platform: wifi_signal
     name: "WiFi Signal Sensor"
     update_interval: 15s
@@ -118,7 +127,7 @@ display:
           // autonomia
           it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
       
-      - id: page_charging
+      - id: page_charge
         lambda: |-
           // batteria
           int x0 = 124; 
