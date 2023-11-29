@@ -17,7 +17,6 @@ i2c:
   frequency: 800kHz
 
 switch:
-  # pulled to gnd 
   - platform: gpio
     pin: GPIO15
     id: jetson_on
@@ -38,6 +37,10 @@ sensor:
     update_interval: 100ms
     filters:
       - multiply: 3.3
+      - sliding_window_moving_average:
+          window_size: 1
+          send_every: 5
+          send_first_at: 5 # accendiamo l'adc dopo 3 secondi
       # - median:
       #     window_size: 5
       #     send_every: 5
@@ -45,64 +48,50 @@ sensor:
     on_value_range:
       - below: 0.5
         then:
-          - lambda: |-
-              if (id(uptime_seconds) <= 3)
-                return;
-
-
-              if (id(status) < 0) {
-                id(oled).show_page(id(page_charge));
-                id(oled).update();
-              } else {
-                id(oled).show_page(id(page_shutdown));
-                id(oled).update();
-                delay(3000);
-                id(jetson_on).turn_off();
-
-              }
-              id(status) = 0; // jetson off
-          # - if:
-          #     condition:
-          #       - lambda: |-    
-          #           return (id(uptime_seconds) > 3);
-          #     then:
-          #       - if:
-          #           condition:
-          #             - lambda: |-    
-          #                 return (id(status) < 0); // ho appena acceso e sto caricando 
-          #           then: # sto alimentando l'esp dalla carica
-          #             - lambda: |-
-          #                 id(status) = 0; // carica e jetson off
-          #             - switch.turn_off: jetson_on
-          #             - display.page.show: page_charge
-          #           else:
-          #             - lambda: |-
-          #                 id(status) = 0; 
-          #             - display.page.show: page_shutdown
-          #             - delay: 3s
-          #             - switch.turn_off: jetson_on
-          #             - display.page.show: page_charge
-      - above: 1.0
-        then:
+          if:
+            condition:
+              - binary_sensor.is_off: jetson_is_powered
+            then:
+              - delay: 2s
+              - display.page.show: page_jetson_splash
+              - switch.turn_on: jetson_on
+            else:
+              - display.page.show: page_shutdown
+              - delay: 2s
+              - switch.turn_off: jetson_on
           # - lambda: |-
-          #     if (id(status) >= 0) {
-          #       id(status) = -1; // spegni
-          #       id(oled).show_page(id(page_start));
-          #       id(jetson_on).turn_on();
-          #       delay(3000);
-          #       id(oled).show_page(id(page_debug));
+          #     if (id(uptime_seconds) <= 3)
+          #       return;
+
+
+          #     if (id(jetson_is_powered).state > 0) {
+          #       id(oled).show_page(id(page_shutdown));
+          #       id(oled).update();
+          #       delay(2000);
+          #       id(jetson_on).turn_off();
+          #     } else {
+          #       id(oled).show_page(id(page_jetson_splash));
+          #       id(oled).update();
+          #       delay(2000);
+          #       id(jetson_on).turn_on();              
           #     }
-          - if:
-              condition:
-                - lambda: |-    
-                    return (id(status) <= 0); // se ho appena acceso o ero in carica
-              then:
-                - lambda: |-
-                    id(status) = 1;
-                - display.page.show: page_jetson_splash
-                - switch.turn_on: jetson_on
-                - delay: 3s
-                - display.page.show: page_debug
+
+      # - above: 1.0
+      #   then:
+      #     - if:
+      #         condition:
+      #           - lambda: |-    
+      #               //return (id(status) <= 0); // se ho appena acceso o ero in carica
+      #               return (id(jetson_is_powered).state > 0); // se ho acceso il jetson con il pulsante
+      #         then:
+      #           - lambda: |-
+      #               id(status) = 1;
+      #           - display.page.show: page_jetson_splash
+      #           #- switch.turn_on: jetson_on
+      #           - delay: 3s
+      #           - display.page.show: page_debug
+      #         else:
+      #           - display.page.show: page_charge
   - platform: wifi_signal
     name: "WiFi Signal Sensor"
     update_interval: 15s
@@ -111,6 +100,16 @@ sensor:
     name: Uptime Sensor
     id: uptime_sensor
     update_interval: 60s
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: D5
+      mode:
+        input: true
+        pullup: false
+    name: jetson is powered
+    id: jetson_is_powered
 
 
 display:
@@ -121,16 +120,10 @@ display:
     update_interval: 1s
     rotation: 180
     pages:
-      # - id: page_start
-      #   lambda: |-
-      #     it.print("Counter:", counter.state)
-      #     //it.print(0, 0, id(roboto), "Start");
-      #     //it.print("Time:", time.now().time_of_day().to_string())
-      #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
       - id: page_debug
         lambda: |-
           it.printf(0, 0, id(font_small), "ADC=%2.2f", id(adc_sensor).state);
-          it.printf(0, 15, id(font_small), "JETSON=%d", id(jetson_on).state);
+          it.printf(0, 15, id(font_small), "JETSON=%d,%d", id(jetson_on).state, id(jetson_is_powered).state);
           it.printf(0, 30, id(font_small), "uptime=%d", id(uptime_seconds));
 
       - id: page_splash
@@ -167,7 +160,7 @@ display:
           //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
 
           // autonomia
-          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
+          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti %d", id(autonomy), id(jetson_is_powered).state);
 
       - id: page2
         lambda: |-
@@ -190,6 +183,18 @@ interval:
             id(battery_level) = 1;
             //id(oled).show_page(id(page2));
           }
+  - interval: 1s
+    then:
+      if:
+        condition:
+          - binary_sensor.is_on: jetson_is_powered
+        then:
+          - switch.turn_on: jetson_on
+          - delay: 2s
+          - display.page.show: page_debug
+        else:
+          - display.page.show: page_charge
+
   # - interval: 3s
   #   then:
   #     - display.page.show_next: oled
@@ -207,11 +212,6 @@ interval:
       - delay: 100ms
       - switch.turn_off: led
   
-# binary_sensor:
-#   - platform: status
-#     name: "Node Status"
-#     id: system_status
-
 globals:
   - id: battery_level
     type: int
@@ -229,10 +229,7 @@ globals:
     type: int
     restore_value: no
     initial_value: '-1' # 0 charging and jetson off, 1 jetson on, -1 splash screen
-  #  - id: power
-  #    type: int
-  #    restore_value: no
-  #    initial_value: '1'
+
 
 
 
