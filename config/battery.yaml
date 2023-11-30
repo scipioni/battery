@@ -87,7 +87,7 @@ sensor:
               - binary_sensor.is_on: jetson_is_on
             # allora lo spengo
             then:
-              - switch.turn_off: jetson_keep_on
+              - switch.turn_off: turn_on_jetson
 
     #     then:
     #       if:
