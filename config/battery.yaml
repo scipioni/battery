@@ -1,39 +1,72 @@
 esphome:
   name: battery
   on_boot:
-      #priority: 550.0
       then:
-        - lambda: |-
-            id(status) = -1; // splash screen
-        - display.page.show: page_splash
-
-esp8266:
-  #board: esp01_1m
-  board: d1_mini
-
-i2c:
-  sda: GPIO4
-  scl: GPIO5
-  frequency: 800kHz
+        - switch.turn_on: boot
 
 switch:
   - platform: gpio
     pin: GPIO15
-    id: jetson_on
+    id: jetson_keep_on
     restore_mode: RESTORE_DEFAULT_OFF
   - platform: gpio
     pin: D4
     id: led
     inverted: True
+  - platform: template
+    id: boot
+    turn_on_action:
+      - logger.log:
+         format: "---- boot ----- jetson is on=%d"
+         args: [ 'id(jetson_is_on).state' ]
+      - if:
+          # se arriva tensione al jetson l'ho acceso tramite il pulsante quindi attivo il transistor che lo mantiene alimentato se rilascio il pulsante,
+          condition:
+            - binary_sensor.is_on: jetson_is_on
+          then:
+            - switch.turn_on: turn_on_jetson
+          # altrimenti ho acceso il micro dal power delivery ed entro nella fase di carica batterie
+          else:
+            - switch.turn_on: turn_on_charge
+  - platform: template
+    id: turn_on_jetson
+    turn_on_action:
+      - logger.log: "turning on jetson"
+      - display.page.show: page_jetson_splash
+      - switch.turn_on: jetson_keep_on
+      - delay: 2s
+      - display.page.show: page_debug
+    turn_off_action:
+      - logger.log: "turning off jetson"
+      - display.page.show: page_shutdown
+      - delay: 2s
+      - switch.turn_off: jetson_keep_on
+      - display.page.show: page_charge
+     
+  - platform: template
+    id: turn_on_charge
+    turn_on_action:
+      - logger.log: "turning on charge"
+      - display.page.show: page_splash
+      - switch.turn_off: jetson_keep_on
+      - delay: 2s
+      - display.page.show: page_charge
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: D5
+      mode:
+        input: true
+        pullup: false
+    name: jetson is on
+    id: jetson_is_on
 
 sensor:
-  # on press button:
-  # - if adc is high then jetson is off and turn on is requested
-  # - if adc is low then turn off is requested
   - platform: adc
     pin: A0
     id: adc_sensor
-    name: "charge"
+    name: "ADC"
     update_interval: 100ms
     filters:
       - multiply: 3.3
@@ -49,32 +82,41 @@ sensor:
       - below: 0.5
         then:
           if:
+            # se premo il pulsante quando il jetson è acceso 
             condition:
-              - binary_sensor.is_off: jetson_is_powered
+              - binary_sensor.is_on: jetson_is_on
+            # allora lo spengo
             then:
-              - delay: 2s
-              - display.page.show: page_jetson_splash
-              - switch.turn_on: jetson_on
-            else:
-              - display.page.show: page_shutdown
-              - delay: 2s
-              - switch.turn_off: jetson_on
-          # - lambda: |-
-          #     if (id(uptime_seconds) <= 3)
-          #       return;
+              - switch.turn_off: jetson_keep_on
+
+    #     then:
+    #       if:
+    #         condition:
+    #           - binary_sensor.is_off: jetson_is_powered
+    #         then:
+    #           - delay: 2s
+    #           - display.page.show: page_jetson_splash
+    #           - switch.turn_on: jetson_on
+    #         else:
+    #           - display.page.show: page_shutdown
+    #           - delay: 2s
+    #           - switch.turn_off: jetson_on
+    #       # - lambda: |-
+    #       #     if (id(uptime_seconds) <= 3)
+    #       #       return;
 
 
-          #     if (id(jetson_is_powered).state > 0) {
-          #       id(oled).show_page(id(page_shutdown));
-          #       id(oled).update();
-          #       delay(2000);
-          #       id(jetson_on).turn_off();
-          #     } else {
-          #       id(oled).show_page(id(page_jetson_splash));
-          #       id(oled).update();
-          #       delay(2000);
-          #       id(jetson_on).turn_on();              
-          #     }
+    #       #     if (id(jetson_is_powered).state > 0) {
+    #       #       id(oled).show_page(id(page_shutdown));
+    #       #       id(oled).update();
+    #       #       delay(2000);
+    #       #       id(jetson_on).turn_off();
+    #       #     } else {
+    #       #       id(oled).show_page(id(page_jetson_splash));
+    #       #       id(oled).update();
+    #       #       delay(2000);
+    #       #       id(jetson_on).turn_on();              
+    #       #     }
 
       # - above: 1.0
       #   then:
@@ -101,16 +143,6 @@ sensor:
     id: uptime_sensor
     update_interval: 60s
 
-binary_sensor:
-  - platform: gpio
-    pin:
-      number: D5
-      mode:
-        input: true
-        pullup: false
-    name: jetson is powered
-    id: jetson_is_powered
-
 
 display:
   - platform: ssd1306_i2c
@@ -123,12 +155,12 @@ display:
       - id: page_debug
         lambda: |-
           it.printf(0, 0, id(font_small), "ADC=%2.2f", id(adc_sensor).state);
-          it.printf(0, 15, id(font_small), "JETSON=%d,%d", id(jetson_on).state, id(jetson_is_powered).state);
+          it.printf(0, 15, id(font_small), "J set %d = %d", id(jetson_keep_on).state, id(jetson_is_on).state);
           it.printf(0, 30, id(font_small), "uptime=%d", id(uptime_seconds));
 
       - id: page_splash
         lambda: |-
-          it.print(64,32,id(font_big), TextAlign::CENTER, "CERBERO");
+          it.print(64,32,id(font_big), TextAlign::CENTER, "RICARICA");
       - id: page_jetson_splash
         lambda: |-
           it.print(64,32,id(font_big), TextAlign::CENTER, "CERBERO");
@@ -136,18 +168,18 @@ display:
         lambda: |-
           it.print(64,32,id(font_big), TextAlign::CENTER, "OFF");
 
-      - id: page_battery
-        lambda: |-
-          // batteria
-          int x0 = 124; 
-          int y0 = 32;
-          it.rectangle(0, 0, x0, y0);
-          it.filled_rectangle(3, 3, id(battery_level)*x0/100-2, y0-6);
-          it.filled_rectangle(x0, 10, x0+1, 12);
-          //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
+      # - id: page_battery
+      #   lambda: |-
+      #     // batteria
+      #     int x0 = 124; 
+      #     int y0 = 32;
+      #     it.rectangle(0, 0, x0, y0);
+      #     it.filled_rectangle(3, 3, id(battery_level)*x0/100-2, y0-6);
+      #     it.filled_rectangle(x0, 10, x0+1, 12);
+      #     //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
 
-          // autonomia
-          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
+      #     // autonomia
+      #     it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
       
       - id: page_charge
         lambda: |-
@@ -160,19 +192,25 @@ display:
           //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
 
           // autonomia
-          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti %d", id(autonomy), id(jetson_is_powered).state);
+          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti %d", id(autonomy), id(jetson_is_on).state);
 
-      - id: page2
-        lambda: |-
-          int minutes = id(uptime_sensor).state/60;
-          it.printf(64, 0, id(font_uptime), TextAlign::CENTER_HORIZONTAL, "acceso da");
-          it.printf(64, 25, id(font_uptime), TextAlign::CENTER_HORIZONTAL, "%d minuti", minutes);
-          //it.rectangle(0, 0, 128, 32);
-          //it.rectangle(0, 0, 128, 16);
-          //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
-          //it.printf(0, 0, id(myfont), "spegnimento...");
+      # - id: page2
+      #   lambda: |-
+      #     int minutes = id(uptime_sensor).state/60;
+      #     it.printf(64, 0, id(font_uptime), TextAlign::CENTER_HORIZONTAL, "acceso da");
+      #     it.printf(64, 25, id(font_uptime), TextAlign::CENTER_HORIZONTAL, "%d minuti", minutes);
+      #     //it.rectangle(0, 0, 128, 32);
+      #     //it.rectangle(0, 0, 128, 16);
+      #     //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
+      #     //it.printf(0, 0, id(myfont), "spegnimento...");
 
 interval:
+  - interval: 2000ms
+    then:
+      - switch.turn_on: led
+      - delay: 100ms
+      - switch.turn_off: led
+  # questa procedura serve solo a testare il grafico della batteria
   - interval: 1s
     then:
       - lambda: |-
@@ -183,34 +221,29 @@ interval:
             id(battery_level) = 1;
             //id(oled).show_page(id(page2));
           }
-  - interval: 1s
-    then:
-      if:
-        condition:
-          - binary_sensor.is_on: jetson_is_powered
-        then:
-          - switch.turn_on: jetson_on
-          - delay: 2s
-          - display.page.show: page_debug
-        else:
-          - display.page.show: page_charge
-
-  # - interval: 3s
+  # - interval: 1s
   #   then:
-  #     - display.page.show_next: oled
-  #     - component.update: oled
-  - interval: 5s
-    then:
-      - lambda: |-
-          id(autonomy) -= 1;
-          if(id(autonomy) < 1) {
-            id(autonomy) = 300;
-          }
-  - interval: 2000ms
-    then:
-      - switch.turn_on: led
-      - delay: 100ms
-      - switch.turn_off: led
+  #     if:
+  #       condition:
+  #         - binary_sensor.is_on: jetson_is_on
+  #       then:
+  #         - switch.turn_on: jetson_on
+  #         - delay: 2s
+  #         - display.page.show: page_debug
+  #       else:
+  #         - display.page.show: page_charge
+
+  # # - interval: 3s
+  # #   then:
+  # #     - display.page.show_next: oled
+  # #     - component.update: oled
+  # - interval: 5s
+  #   then:
+  #     - lambda: |-
+  #         id(autonomy) -= 1;
+  #         if(id(autonomy) < 1) {
+  #           id(autonomy) = 300;
+  #         }
   
 globals:
   - id: battery_level
@@ -225,12 +258,19 @@ globals:
     type: int
     restore_value: no
     initial_value: '180'
-  - id: status
-    type: int
-    restore_value: no
-    initial_value: '-1' # 0 charging and jetson off, 1 jetson on, -1 splash screen
+  # - id: status
+  #   type: int
+  #   restore_value: no
+  #   initial_value: '-1' # 0 charging and jetson off, 1 jetson on, -1 splash screen
 
+esp8266:
+  #board: esp01_1m
+  board: d1_mini
 
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  frequency: 800kHz
 
 
 color:
@@ -308,76 +348,13 @@ ota:
   password: ""
 
 wifi:
-  ssid: "ranch"
+  ssid: !secret WifiSsid
   password: !secret WifiPassword
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Battery Fallback Hotspot"
-    password: "BcmUJnZZawL0"
+    ssid: "Cerbero Fallback Hotspot"
+    password: !secret WifiPasswordHotspot
 
-captive_portal:
+#captive_portal:
 
-# The ST7735 display is connected to the NodeMCU board as follows:
-# RST pin is connected to D4 (ESP8266EX GPIO2),
-# CS pin is connected to D3 (ESP8266EX GPIO0),
-# D/C-RS pin is connected to D2 (ESP8266EX GPIO4),
-# DIN-mosi-sda pin is connected to D7 (ESP8266EX GPIO13),
-# CLK-sck pin is connected to D5 (ESP8266EX GPIO14),
-## Pins D5 (GPIO14) and D7 (GPIO13) are hardware SPI module pins of the ESP8266EX microcontroller respectively for SCK (serial clock) and MOSI (master-out slave-in).
-
-# spi:
-#   clk_pin: GPIO14
-#   mosi_pin: GPIO13
-
-
-# # SDA for MOSI and SCK for CLK.
-# display:
-#   - platform: st7735
-#     id: oled
-#     model: "INITR_BLACKTAB"
-#     reset_pin: GPIO2
-#     cs_pin: GPIO0
-#     dc_pin: GPIO4
-#     rotation: 90
-#     device_width: 128
-#     device_height: 160
-#     col_start: 0
-#     row_start: 0
-#     eight_bit_color: True
-#     #use_bgr: True
-#     update_interval: 1s
-#     pages:
-#       # - id: page_start
-#       #   lambda: |-
-#       #     it.print("Counter:", counter.state)
-#       #     //it.print(0, 0, id(roboto), "Start");
-#       #     //it.print("Time:", time.now().time_of_day().to_string())
-#       #     //it.printf(0, 30, id(opensans_14), "CO2: %.0f ppm", id(co2).state);
-
-#       - id: page1
-#         lambda: |-
-#           it.rectangle(0,  0, it.get_width(), it.get_height(), id(my_blue));
-#           it.rectangle(0, 20, it.get_width(), it.get_height(), id(my_blue));   // header bar
-          
-#           it.print(it.get_width()/2, 10, id(myfont), id(my_red), TextAlign::CENTER, "Cerbero");
-#           //it.print(it.get_width()/2, 30, id(myfont), id(my_green), TextAlign::CENTER, "Cerbero");
-#           //it.print(it.get_width()/2, 50, id(myfont), id(my_red), TextAlign::CENTER, "ESPHome");
-#           int x_max = 110;
-#           int y=30;
-#           int h=15;
-#           it.rectangle(0, y, x_max, y+h);
-#           it.filled_rectangle(0, y, id(battery_level)*x_max/100, y+h);
-#           it.printf(x_max+3, y, id(font_level), "%d%%", min(99,id(battery_level)));
-#       # - id: page2
-#       #   lambda: |-
-#       #     int x_max = 100;
-#       #     it.rectangle(0, 0, x_max, 32);
-#       #     it.filled_rectangle(0, 0, id(battery_level)*x_max/100, 32);
-#       #     it.printf(x_max+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
-#       # - id: page3
-#       #   lambda: |-
-#       #     //it.rectangle(0, 0, 128, 32);
-#       #     //it.rectangle(0, 0, 128, 16);
-#       #     //it.printf(1, 0, id(myfont), "Vcc=%2.3fV", id(vcc).state);
-#       #     it.printf(0, 0, id(myfont), "spegnimento...");
