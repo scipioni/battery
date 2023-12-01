@@ -1,12 +1,12 @@
 esphome:
   name: battery
   on_boot:
-      then:
-        - switch.turn_on: boot
+    then:
+      - switch.turn_on: boot
 
 switch:
   - platform: gpio
-    pin: GPIO15
+    pin: D8
     id: jetson_keep_on
     restore_mode: RESTORE_DEFAULT_OFF
   - platform: gpio
@@ -17,17 +17,17 @@ switch:
     id: boot
     turn_on_action:
       - logger.log:
-         format: "---- boot ----- jetson is on=%d"
-         args: [ 'id(jetson_is_on).state' ]
+          format: "---- boot ----- pd is active=%d"
+          args: ["id(pd_is_active).state"]
       - if:
-          # se arriva tensione al jetson l'ho acceso tramite il pulsante quindi attivo il transistor che lo mantiene alimentato se rilascio il pulsante,
+          # se arriva tensione dal pd non accendo il jetson ma entro nello stato di carical'ho acceso tramite il pulsante quindi attivo il transistor che lo mantiene alimentato se rilascio il pulsante,
           condition:
-            - binary_sensor.is_on: jetson_is_on
+            - binary_sensor.is_on: pd_is_active
           then:
-            - switch.turn_on: turn_on_jetson
-          # altrimenti ho acceso il micro dal power delivery ed entro nella fase di carica batterie
-          else:
             - switch.turn_on: turn_on_charge
+          # altrimenti accendo il jetson
+          else:
+            - switch.turn_on: turn_on_jetson
   - platform: template
     id: turn_on_jetson
     turn_on_action:
@@ -42,7 +42,7 @@ switch:
       - delay: 2s
       - switch.turn_off: jetson_keep_on
       - display.page.show: page_charge
-     
+
   - platform: template
     id: turn_on_charge
     turn_on_action:
@@ -60,7 +60,7 @@ binary_sensor:
         input: true
         pullup: false
     name: jetson is on
-    id: jetson_is_on
+    id: pd_is_active
 
 sensor:
   - platform: adc
@@ -82,13 +82,20 @@ sensor:
       - below: 0.5
         then:
           if:
-            # se premo il pulsante quando il jetson è acceso 
+            # se premo il pulsante quando il jetson è acceso
             condition:
-              - binary_sensor.is_on: jetson_is_on
+              #- binary_sensor.is_on: pd_is_active
+              - switch.is_on: jetson_keep_on
             # allora lo spengo
             then:
               - switch.turn_off: turn_on_jetson
-
+      - above: 2.0
+        then:
+          if:
+            condition:
+              - binary_sensor.is_on: pd_is_active
+            then:
+              - switch.turn_on: turn_on_jetson
     #     then:
     #       if:
     #         condition:
@@ -105,7 +112,6 @@ sensor:
     #       #     if (id(uptime_seconds) <= 3)
     #       #       return;
 
-
     #       #     if (id(jetson_is_powered).state > 0) {
     #       #       id(oled).show_page(id(page_shutdown));
     #       #       id(oled).update();
@@ -115,25 +121,25 @@ sensor:
     #       #       id(oled).show_page(id(page_jetson_splash));
     #       #       id(oled).update();
     #       #       delay(2000);
-    #       #       id(jetson_on).turn_on();              
+    #       #       id(jetson_on).turn_on();
     #       #     }
 
-      # - above: 1.0
-      #   then:
-      #     - if:
-      #         condition:
-      #           - lambda: |-    
-      #               //return (id(status) <= 0); // se ho appena acceso o ero in carica
-      #               return (id(jetson_is_powered).state > 0); // se ho acceso il jetson con il pulsante
-      #         then:
-      #           - lambda: |-
-      #               id(status) = 1;
-      #           - display.page.show: page_jetson_splash
-      #           #- switch.turn_on: jetson_on
-      #           - delay: 3s
-      #           - display.page.show: page_debug
-      #         else:
-      #           - display.page.show: page_charge
+    # - above: 1.0
+    #   then:
+    #     - if:
+    #         condition:
+    #           - lambda: |-
+    #               //return (id(status) <= 0); // se ho appena acceso o ero in carica
+    #               return (id(jetson_is_powered).state > 0); // se ho acceso il jetson con il pulsante
+    #         then:
+    #           - lambda: |-
+    #               id(status) = 1;
+    #           - display.page.show: page_jetson_splash
+    #           #- switch.turn_on: jetson_on
+    #           - delay: 3s
+    #           - display.page.show: page_debug
+    #         else:
+    #           - display.page.show: page_charge
   - platform: wifi_signal
     name: "WiFi Signal Sensor"
     update_interval: 15s
@@ -142,7 +148,6 @@ sensor:
     name: Uptime Sensor
     id: uptime_sensor
     update_interval: 60s
-
 
 display:
   - platform: ssd1306_i2c
@@ -155,7 +160,7 @@ display:
       - id: page_debug
         lambda: |-
           it.printf(0, 0, id(font_small), "ADC=%2.2f", id(adc_sensor).state);
-          it.printf(0, 15, id(font_small), "J set %d = %d", id(jetson_keep_on).state, id(jetson_is_on).state);
+          it.printf(0, 15, id(font_small), "JET=%d PD=%d", id(jetson_keep_on).state, id(pd_is_active).state);
           it.printf(0, 30, id(font_small), "uptime=%d", id(uptime_seconds));
 
       - id: page_splash
@@ -168,19 +173,6 @@ display:
         lambda: |-
           it.print(64,32,id(font_big), TextAlign::CENTER, "OFF");
 
-      # - id: page_battery
-      #   lambda: |-
-      #     // batteria
-      #     int x0 = 124; 
-      #     int y0 = 32;
-      #     it.rectangle(0, 0, x0, y0);
-      #     it.filled_rectangle(3, 3, id(battery_level)*x0/100-2, y0-6);
-      #     it.filled_rectangle(x0, 10, x0+1, 12);
-      #     //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
-
-      #     // autonomia
-      #     it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti", id(autonomy));
-      
       - id: page_charge
         lambda: |-
           // batteria
@@ -192,7 +184,8 @@ display:
           //it.printf(x0+3, 0, id(font_level), "%d%%", min(99,id(battery_level)));
 
           // autonomia
-          it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti %d", id(autonomy), id(jetson_is_on).state);
+          //it.printf(64, y0+2, id(font_autonomy), TextAlign::CENTER_HORIZONTAL, "%d minuti %d", id(autonomy), id(pd_is_active).state);
+          it.printf(0, y0+2, id(font_autonomy), "ADC %f", id(adc_sensor).state);
 
       # - id: page2
       #   lambda: |-
@@ -225,7 +218,7 @@ interval:
   #   then:
   #     if:
   #       condition:
-  #         - binary_sensor.is_on: jetson_is_on
+  #         - binary_sensor.is_on: pd_is_active
   #       then:
   #         - switch.turn_on: jetson_on
   #         - delay: 2s
@@ -244,20 +237,20 @@ interval:
   #         if(id(autonomy) < 1) {
   #           id(autonomy) = 300;
   #         }
-  
+
 globals:
   - id: battery_level
     type: int
     restore_value: no
-    initial_value: '100'
+    initial_value: "100"
   - id: uptime_seconds
     type: int
     restore_value: no
-    initial_value: '0'
+    initial_value: "0"
   - id: autonomy
     type: int
     restore_value: no
-    initial_value: '180'
+    initial_value: "180"
   # - id: status
   #   type: int
   #   restore_value: no
@@ -271,7 +264,6 @@ i2c:
   sda: GPIO4
   scl: GPIO5
   frequency: 800kHz
-
 
 color:
   - id: my_red
@@ -309,8 +301,7 @@ color:
   - id: my_black
     red: 100%
     green: 100%
-    blue: 100%    
-
+    blue: 100%
 
 font:
   # - file: "fonts/Comic Sans MS.ttf"
@@ -355,6 +346,5 @@ wifi:
   ap:
     ssid: "Cerbero Fallback Hotspot"
     password: !secret WifiPasswordHotspot
-
 #captive_portal:
 
